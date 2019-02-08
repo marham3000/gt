@@ -35,6 +35,8 @@ globalVariables(
     "colnum",
     "colnum_final",
     "colors",
+    "curr_code",
+    "curr_name",
     "data_attr",
     "footnotes_to_list",
     "fs_id",
@@ -56,6 +58,7 @@ globalVariables(
     "row_end",
     "rownum",
     "styles_appended",
+    "symbol",
     "text",
     "Var1",
     "base_locale_id",
@@ -76,14 +79,15 @@ globalVariables(
     )
   )
 
-#' gt package options
+#' \pkg{gt} package options
 #'
 #' @section Package options:
 #'
-#' gt uses the following \code{\link{options}} to configure behavior:
+#' \pkg{gt} uses the following \code{\link{options}} to configure behavior:
 #'
 #' \itemize{
-#'   \item \code{gt.stub_group.sep}: a separator
+#'   \item \code{gt.stub_group.sep}: a separator between groups for the
+#'   stub group label.
 #'
 #' }
 #' @name gt-options

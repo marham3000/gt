@@ -1,7 +1,9 @@
 #' Format numeric values
 #'
-#' With numeric values in a \pkg{gt} table, we can perform number-based formatting so
-#' that the targeted values are rendered with the following options:
+#' With numeric values in a \pkg{gt} table, we can perform number-based
+#' formatting so that the targeted values are rendered with a higher
+#' consideration for tabular presentation. Furthermore, there is finer control
+#' over numeric foramtting with the following options:
 #' \itemize{
 #' \item decimals: choice of the number of decimal places, option to drop
 #' trailing zeros, and a choice of the decimal symbol
@@ -10,6 +12,8 @@
 #' \item digit grouping separators: options to enable/disable digit separators
 #' and provide a choice of separator symbol
 #' \item scaling: we can choose to scale targeted values by a multiplier value
+#' \item large-number suffixing: larger figures (thousands, millions, etc.) can
+#' be autoscaled and decorated with the appropriate suffixes
 #' \item pattern: option to use a text pattern for decoration of the formatted
 #' values
 #' \item locale-based formatting: providing a locale ID will result in number
@@ -50,6 +54,21 @@
 #'   group separator is set by \code{sep_mark} and overridden if a locale ID is
 #'   provided to \code{locale}. This setting is \code{TRUE} by default.
 #' @param scale_by a value to scale the input. The default is \code{1.0}.
+#' @param suffixing an option to scale and apply suffixes to larger numbers
+#'   (e.g., \code{1924000} can be transformed to \code{1.92M}). This option can
+#'   accept a logical value, where \code{FALSE} (the default) will not perform
+#'   this transformation and \code{TRUE} will apply thousands (\code{K}),
+#'   millions (\code{M}), billions (\code{B}), and trillions (\code{T}) suffixes
+#'   after automatic value scaling. We can also specify which symbols to use for
+#'   each of the value ranges by using a character vector of the preferred
+#'   symbols to replace the defaults (e.g., \code{c("k", "Ml", "Bn", "Tr")}).
+#'   Including \code{NA} values in the vector will ensure that the particular
+#'   range will either not be included in the transformation (e.g, \code{c(NA,
+#'   "M", "B", "T")} won't modify numbers in the thousands range) or the range
+#'   will inherit a previous suffix (e.g., with \code{c("K", "M", NA, "T")}, all
+#'   numbers in the range of millions and billions will be in terms of
+#'   millions). Any use of \code{suffixing} (where not \code{FALSE}) means that
+#'   any value provided to \code{scale_by} will be ignored.
 #' @param pattern a formatting pattern that allows for decoration of the
 #'   formatted value (defined here as \code{x}). The semantics for the pattern
 #'   are taken from \code{glue::glue()}, where the formatted cell value is
@@ -57,8 +76,6 @@
 #'   pattern. We can treat other instances of \code{{...}} as environments that
 #'   undergo evaluation, so, \code{x}, variables from the global environment,
 #'   and functions are all usable within \code{{...}}.
-#' @param sep_mark the mark to use as a separator between groups of digits.
-#' @param dec_mark the character to use as a decimal mark.
 #' @param locale an optional locale ID that can be used for formatting the value
 #'   according the locale's rules. Examples include \code{"en_US"} for English
 #'   (United States) and \code{"fr_FR"} for French (France). The use of a valid
@@ -79,23 +96,26 @@
 #'     use_seps = FALSE
 #'   )
 #'
-#' # Use `exibble` to create a gt table;
-#' # format the `num` column as numeric,
-#' # but treating the first four rows
-#' # different than the last four
+#' # Use `countrypops` to create a gt
+#' # table; format all columns to use
+#' # large-number suffixing
 #' tab_2 <-
-#'   exibble %>%
-#'   gt() %>%
+#'   countrypops %>%
+#'   dplyr::select(
+#'     country_code_3, year, population) %>%
+#'   dplyr::filter(
+#'     country_code_3 %in% c(
+#'       "CHN", "IND", "USA", "PAK", "IDN")
+#'   ) %>%
+#'   dplyr::filter(year > 1975 & year %% 5 == 0) %>%
+#'   tidyr::spread(year, population) %>%
+#'   dplyr::arrange(desc(`2015`)) %>%
+#'   gt(rowname_col = "country_code_3") %>%
 #'   fmt_number(
-#'     columns = vars(num),
-#'     rows = 1:4,
-#'     decimals = 2) %>%
-#'   fmt_number(
-#'     columns = vars(num),
-#'     rows = 5:8,
-#'     decimals = 1,
-#'     scale_by = 1/1000,
-#'     pattern = "{x}K")
+#'     columns = TRUE,
+#'     decimals = 2,
+#'     suffixing = TRUE
+#'   )
 #'
 #' @section Figures:
 #' \if{html}{\figure{man_fmt_number_1.svg}{options: width=100\%}}
@@ -113,6 +133,7 @@ fmt_number <- function(data,
                        negative_val = "signed",
                        use_seps = TRUE,
                        scale_by = 1.0,
+                       suffixing = FALSE,
                        pattern = "{x}",
                        sep_mark = ",",
                        dec_mark = ".",
@@ -133,6 +154,25 @@ fmt_number <- function(data,
     sep_mark <- ""
   }
 
+  # Normalize the `suffixing` input to either return a
+  # character vector of suffix labels, or NULL (the
+  # case where `suffixing` is FALSE)
+  suffix_labels <- normalize_suffixing_inputs(suffixing)
+
+  # If choosing to perform large-number suffixing
+  # of numeric values, force `scale_by` to be 1.0
+  if (!is.null(suffix_labels)) {
+
+    if (!missing(scale_by) && !identical(scale_by, 1.0)) {
+      warning("The value for `scale_by` can't be changed if `suffixing` is ",
+              "anything other than `FALSE`. The value provided to `scale_by` ",
+              "will be ignored.",
+              call. = FALSE)
+    }
+
+    scale_by <- 1.0
+  }
+
   # Capture expression in `rows`
   rows <- rlang::enquo(rows)
 
@@ -147,6 +187,23 @@ fmt_number <- function(data,
           # Determine which of `x` are not NA
           non_na_x <- !is.na(x)
 
+          # Create a tibble with scaled values for
+          # `x[non_na_x]` and the suffix labels to
+          # use for character formatting
+          suffix_df <-
+            num_suffix(
+              x = round(x[non_na_x], decimals),
+              suffixes = suffix_labels
+            )
+
+          # If choosing to perform large-number suffixing
+          # of numeric values, replace `scale_by` with
+          # a vector of scaling values (of equal length
+          # with `x[non_na_x]`)
+          if (!is.null(suffix_labels)) {
+            scale_by <- suffix_df$scale_by[non_na_x]
+          }
+
           # Create `x_str` with same length as `x`
           x_str <- rep(NA_character_, length(x))
 
@@ -160,6 +217,15 @@ fmt_number <- function(data,
               decimal.mark = dec_mark,
               format = "f",
               drop0trailing = drop_trailing_zeros)
+
+          # Apply large-number suffixes to scaled and
+          # formatted values if that option is taken
+          if (!is.null(suffix_labels)) {
+
+            # Apply vector of suffixes
+            x_str[non_na_x] <-
+              paste0(x_str[non_na_x], suffix_df$suffix[non_na_x])
+          }
 
           # Handle negative values
           if (negative_val == "parens") {
@@ -186,9 +252,9 @@ fmt_number <- function(data,
 
 #' Format values to scientific notation
 #'
-#' With numeric values in a \pkg{gt} table, we can perform formatting so that the
-#' targeted values are rendered in scientific notation. Furthermore, there is
-#' fine control with the following options:
+#' With numeric values in a \pkg{gt} table, we can perform formatting so that
+#' the targeted values are presented in scientific notation. We can exert finer
+#' finer control on the formatting with the following options:
 #' \itemize{
 #' \item decimals: choice of the number of decimal places, option to drop
 #' trailing zeros, and a choice of the decimal symbol
@@ -353,8 +419,10 @@ fmt_scientific <- function(data,
 #' Format values as a percentage
 #'
 #' With numeric values in a \pkg{gt} table, we can perform percentage-based
-#' formatting. The targeted values are scaled by \code{100} and are rendered
-#' with the following options:
+#' formatting. It is assumed the input numeric values are in a fractional format
+#' since the will be automatically multplied by \code{100} before decorating
+#' with a percent sign. For more control over percentage formatting, we can use
+#' the following options:
 #' \itemize{
 #' \item percent sign placement: the percent sign can be placed after or
 #' before the values and a space can be inserted between the symbol and the
@@ -560,12 +628,14 @@ fmt_percent <- function(data,
 
 #' Format values as currencies
 #'
-#' With numeric values in a \pkg{gt} table, we can perform currency-based formatting.
-#' This function supports both automatic formatting with a three-letter currency
-#' code and numeric formatting facilitated through the use of a locale ID.
-#'
-#' The targeted numeric values are rendered with the following options:
+#' With numeric values in a \pkg{gt} table, we can perform currency-based
+#' formatting. This function supports both automatic formatting with a
+#' three-letter currency code and numeric formatting facilitated through the use
+#' of a locale ID. For fine control the conversion from numeric to currency
+#' values, we can take advantage of the following options:
 #' \itemize{
+#' \item the currency: providing a currency code or common currency name will
+#' procure the correct currency symbol and number of currency subunits
 #' \item currency symbol placement: the currency symbol can be placed before
 #' or after the values
 #' \item decimals/subunits: choice of the number of decimal places, and a
@@ -576,11 +646,16 @@ fmt_percent <- function(data,
 #' \item digit grouping separators: options to enable/disable digit separators
 #' and provide a choice of separator symbol
 #' \item scaling: we can choose to scale targeted values by a multiplier value
+#' \item large-number suffixing: larger figures (thousands, millions, etc.) can
+#' be autoscaled and decorated with the appropriate suffixes
 #' \item pattern: option to use a text pattern for decoration of the formatted
 #' currency values
 #' \item locale-based formatting: providing a locale ID will result in
 #' currency formatting specific to the chosen locale
 #' }
+#'
+#' We can use the \code{\link{info_currencies}()} function for a useful
+#' reference on all of the possible inputs to \code{currency}.
 #'
 #' Targeting of values is done through \code{columns} and additionally by
 #' \code{rows} (if nothing is provided for \code{rows} then entire columns are
@@ -590,10 +665,16 @@ fmt_percent <- function(data,
 #' information on this.
 #'
 #' @inheritParams fmt_number
-#' @param currency the currency to use for the numeric value. This is to be
-#'   supplied as a 3-letter currency code. Examples include \code{"USD"} for
-#'   U.S. Dollars and \code{"EUR"} for the Euro currency. The default is
-#'   \code{"USD"}.
+#' @param currency the currency to use for the numeric value. This input can be
+#'   supplied as a 3-letter currency code (e.g., \code{"USD"} for U.S. Dollars,
+#'   \code{"EUR"} for the Euro currency). Use \code{\link{info_currencies}()} to
+#'   get an information table with all of the valid currency codes and examples
+#'   of each. Alternatively, we can provide a common currency name (e.g.,
+#'   \code{"dollar"}, \code{"pound"}, \code{"yen"}, etc.) to simplify the
+#'   process. Use \code{\link{info_currencies}()} with the \code{type ==
+#'   "symbol"} option to view an information table with all of the supported
+#'   currency symbol names along with examples. If nothing is provided then
+#'   \code{"USD"} will be used.
 #' @param use_subunits an option for whether the subunits portion of a currency
 #'   value should be displayed.
 #' @param placement the placement of the currency symbol. This can be either be
@@ -647,6 +728,7 @@ fmt_currency <- function(data,
                          decimals = NULL,
                          use_seps = TRUE,
                          scale_by = 1.0,
+                         suffixing = FALSE,
                          pattern = "{x}",
                          sep_mark = ",",
                          dec_mark = ".",
@@ -695,6 +777,25 @@ fmt_currency <- function(data,
     sep_mark <- ""
   }
 
+  # Normalize the `suffixing` input to either return a
+  # character vector of suffix labels, or NULL (the
+  # case where `suffixing` is FALSE)
+  suffix_labels <- normalize_suffixing_inputs(suffixing)
+
+  # If choosing to perform large-number suffixing
+  # of numeric values, force `scale_by` to be 1.0
+  if (!is.null(suffix_labels)) {
+
+    if (!missing(scale_by) && !identical(scale_by, 1.0)) {
+      warning("The value for `scale_by` can't be changed if `suffixing` is ",
+              "anything other than `FALSE`. The value provided to `scale_by` ",
+              "will be ignored.",
+              call. = FALSE)
+    }
+
+    scale_by <- 1.0
+  }
+
   # Capture expression in `rows`
   rows <- rlang::enquo(rows)
 
@@ -715,6 +816,23 @@ fmt_currency <- function(data,
           # Create `x_str` with same length as `x`
           x_str <- rep(NA_character_, length(x))
 
+          # Create a tibble with scaled values for
+          # `x[non_na_x]` and the suffix labels to
+          # use for character formatting
+          suffix_df <-
+            num_suffix(
+              x = round(x[non_na_x], decimals),
+              suffixes = suffix_labels
+            )
+
+          # If choosing to perform large-number suffixing
+          # of numeric values, replace `scale_by` with
+          # a vector of scaling values (of equal length
+          # with `x[non_na_x]`)
+          if (!is.null(suffix_labels)) {
+            scale_by <- suffix_df$scale_by[non_na_x]
+          }
+
           # Format all non-NA x values
           x_str[non_na_x] <-
             formatC(
@@ -725,6 +843,15 @@ fmt_currency <- function(data,
               decimal.mark = dec_mark,
               format = "f",
               drop0trailing = FALSE)
+
+          # Apply large-number suffixes to scaled and
+          # formatted values if that option is taken
+          if (!is.null(suffix_labels)) {
+
+            # Apply vector of suffixes
+            x_str[non_na_x] <-
+              paste0(x_str[non_na_x], suffix_df$suffix[non_na_x])
+          }
 
           # Handle placement of the currency symbol
           if (placement == "left") {
@@ -772,6 +899,24 @@ fmt_currency <- function(data,
           # Create `x_str` with same length as `x`
           x_str <- rep(NA_character_, length(x))
 
+          # Create a tibble with scaled values for
+          # `x[non_na_x]` and the suffix labels to
+          # use for character formatting
+          suffix_df <-
+            num_suffix(
+              x = round(x[non_na_x], decimals),
+              suffixes = suffix_labels
+            )
+
+          # If choosing to perform large-number suffixing
+          # of numeric values, replace `scale_by` with
+          # a vector of scaling values (of equal length
+          # with `x[non_na_x]`)
+          if (!is.null(suffix_labels)) {
+            scale_by <- suffix_df$scale_by[non_na_x]
+          }
+
+          # Format all non-NA x values
           x_str[non_na_x] <-
             formatC(
               x = x[non_na_x] * scale_by,
@@ -781,6 +926,15 @@ fmt_currency <- function(data,
               decimal.mark = dec_mark,
               format = "f",
               drop0trailing = FALSE)
+
+          # Apply large-number suffixes to scaled and
+          # formatted values if that option is taken
+          if (!is.null(suffix_labels)) {
+
+            # Apply vector of suffixes
+            x_str[non_na_x] <-
+              paste0(x_str[non_na_x], suffix_df$suffix[non_na_x])
+          }
 
           # Handle placement of the currency symbol
           if (placement == "left") {
@@ -828,6 +982,23 @@ fmt_currency <- function(data,
           # Create `x_str` with same length as `x`
           x_str <- rep(NA_character_, length(x))
 
+          # Create a tibble with scaled values for
+          # `x[non_na_x]` and the suffix labels to
+          # use for character formatting
+          suffix_df <-
+            num_suffix(
+              x = round(x[non_na_x], decimals),
+              suffixes = suffix_labels
+            )
+
+          # If choosing to perform large-number suffixing
+          # of numeric values, replace `scale_by` with
+          # a vector of scaling values (of equal length
+          # with `x[non_na_x]`)
+          if (!is.null(suffix_labels)) {
+            scale_by <- suffix_df$scale_by[non_na_x]
+          }
+
           # Format all non-NA x values
           x_str[non_na_x] <-
             formatC(
@@ -838,6 +1009,15 @@ fmt_currency <- function(data,
               decimal.mark = dec_mark,
               format = "f",
               drop0trailing = FALSE)
+
+          # Apply large-number suffixes to scaled and
+          # formatted values if that option is taken
+          if (!is.null(suffix_labels)) {
+
+            # Apply vector of suffixes
+            x_str[non_na_x] <-
+              paste0(x_str[non_na_x], suffix_df$suffix[non_na_x])
+          }
 
           # Handle placement of the currency symbol
           if (placement == "left") {
@@ -882,7 +1062,8 @@ fmt_currency <- function(data,
 #' Format input date values that are character-based and expressed according to
 #' the ISO 8601 date format (\code{YYYY-MM-DD}). Once the appropriate data cells
 #' are targeted with \code{columns} (and, optionally, \code{rows}), we can
-#' simply apply a preset date style to format the dates.
+#' simply apply a preset date style (see table in
+#' \code{\link{info_date_style}()} for info) to format the dates.
 #'
 #' The following date styles are available for simpler formatting of ISO dates
 #' (all using the input date of \code{2000-02-29} in the example output dates):
@@ -998,7 +1179,8 @@ fmt_date <- function(data,
 #' Format input time values that are character-based and expressed according to
 #' the ISO 8601 time format (\code{HH:MM:SS}). Once the appropriate data cells
 #' are targeted with \code{columns} (and, optionally, \code{rows}), we can
-#' simply apply a preset time style to format the times.
+#' simply apply a preset time style (see table in
+#' \code{\link{info_time_style}()} for info) to format the times.
 #'
 #' The following time styles are available for simpler formatting of ISO times
 #' (all using the input time of \code{14:35:00} in the example output times):
@@ -1104,8 +1286,9 @@ fmt_time <- function(data,
 #' Format input date-time values that are character-based and expressed
 #' according to the ISO 8601 date-time format (\code{YYYY-MM-DD HH:MM:SS}). Once
 #' the appropriate data cells are targeted with \code{columns} (and, optionally,
-#' \code{rows}), we can simply apply preset date and time styles to format the
-#' data-time values.
+#' \code{rows}), we can simply apply preset date and time styles (see tables in
+#' \code{\link{info_date_style}()} and \code{\link{info_time_style}()} for more
+#' info) to format the data-time values.
 #'
 #' The following date styles are available for simpler formatting of the date
 #' portion (all using the input date of \code{2000-02-29} in the example output
@@ -1333,8 +1516,8 @@ fmt_passthrough <- function(data,
 #'
 #' Wherever there is missing data (i.e., \code{NA} values) a customizable mark
 #' may present better than the standard \code{NA} text that would otherwise
-#' appear. The \code{missing_text} argument allows for any replacement text that
-#' is suitable.
+#' appear. The \code{fmt_missing()} function allows for this replacement through
+#' its \code{missing_text} argument (where an em dash serves as the default).
 #'
 #' Targeting of values is done through \code{columns} and additionally by
 #' \code{rows} (if nothing is provided for \code{rows} then entire columns are

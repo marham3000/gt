@@ -407,6 +407,7 @@ apply_pattern_fmt_x <- function(pattern,
   glue::glue(pattern, x = values) %>% as.character()
 }
 
+
 # Derive a label based on a formula or a function name
 #' @import rlang
 #' @noRd
@@ -665,4 +666,18 @@ footnote_glyphs <- function(x,
     FUN = function(val_i, rep_i) {
       paste(rep(val_i, rep_i), collapse = "")}
   ) %>% unname()
+}
+
+#' @importFrom checkmate test_class
+#' @noRd
+is_gt <- function(data) {
+
+  checkmate::test_class(data, "gt_tbl")
+}
+
+stop_if_not_gt <- function(data) {
+
+  if (!is_gt(data)) {
+    stop("The object to `data` is not a `gt_tbl` object.", call. = FALSE)
+  }
 }

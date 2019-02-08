@@ -6,9 +6,9 @@
 \usage{
 fmt_currency(data, columns, rows = NULL, currency = "USD",
   use_subunits = TRUE, negative_val = "signed", decimals = NULL,
-  use_seps = TRUE, scale_by = 1, pattern = "{x}", sep_mark = ",",
-  dec_mark = ".", placement = "left", incl_space = FALSE,
-  locale = NULL)
+  use_seps = TRUE, scale_by = 1, suffixing = FALSE,
+  pattern = "{x}", sep_mark = ",", dec_mark = ".",
+  placement = "left", incl_space = FALSE, locale = NULL)
 }
 \arguments{
 \item{data}{a table object that is created using the \code{\link{gt}()}
@@ -30,10 +30,16 @@ focused on selections. The select helper functions are:
 and \code{\link{everything}()}. We can also use expressions to filter down
 to the rows we need (e.g., \code{[colname_1] > 100 & [colname_2] < 50}).}
 
-\item{currency}{the currency to use for the numeric value. This is to be
-supplied as a 3-letter currency code. Examples include \code{"USD"} for
-U.S. Dollars and \code{"EUR"} for the Euro currency. The default is
-\code{"USD"}.}
+\item{currency}{the currency to use for the numeric value. This input can be
+supplied as a 3-letter currency code (e.g., \code{"USD"} for U.S. Dollars,
+\code{"EUR"} for the Euro currency). Use \code{\link{info_currencies}()} to
+get an information table with all of the valid currency codes and examples
+of each. Alternatively, we can provide a common currency name (e.g.,
+\code{"dollar"}, \code{"pound"}, \code{"yen"}, etc.) to simplify the
+process. Use \code{\link{info_currencies}()} with the \code{type ==
+"symbol"} option to view an information table with all of the supported
+currency symbol names along with examples. If nothing is provided then
+\code{"USD"} will be used.}
 
 \item{use_subunits}{an option for whether the subunits portion of a currency
 value should be displayed.}
@@ -51,6 +57,22 @@ provided to \code{locale}. This setting is \code{TRUE} by default.}
 
 \item{scale_by}{a value to scale the input. The default is \code{1.0}.}
 
+\item{suffixing}{an option to scale and apply suffixes to larger numbers
+(e.g., \code{1924000} can be transformed to \code{1.92M}). This option can
+accept a logical value, where \code{FALSE} (the default) will not perform
+this transformation and \code{TRUE} will apply thousands (\code{K}),
+millions (\code{M}), billions (\code{B}), and trillions (\code{T}) suffixes
+after automatic value scaling. We can also specify which symbols to use for
+each of the value ranges by using a character vector of the preferred
+symbols to replace the defaults (e.g., \code{c("k", "Ml", "Bn", "Tr")}).
+Including \code{NA} values in the vector will ensure that the particular
+range will either not be included in the transformation (e.g, \code{c(NA,
+"M", "B", "T")} won't modify numbers in the thousands range) or the range
+will inherit a previous suffix (e.g., with \code{c("K", "M", NA, "T")}, all
+numbers in the range of millions and billions will be in terms of
+millions). Any use of \code{suffixing} (where not \code{FALSE}) means that
+any value provided to \code{scale_by} will be ignored.}
+
 \item{pattern}{a formatting pattern that allows for decoration of the
 formatted value (defined here as \code{x}). The semantics for the pattern
 are taken from \code{glue::glue()}, where the formatted cell value is
@@ -59,9 +81,13 @@ pattern. We can treat other instances of \code{{...}} as environments that
 undergo evaluation, so, \code{x}, variables from the global environment,
 and functions are all usable within \code{{...}}.}
 
-\item{sep_mark}{the mark to use as a separator between groups of digits.}
+\item{sep_mark}{the mark to use as a separator between groups of digits
+(e.g., using \code{sep_mark = ","} with \code{1000} would result in a
+formatted value of \code{1,000}).}
 
-\item{dec_mark}{the character to use as a decimal mark.}
+\item{dec_mark}{the character to use as a decimal mark (e.g., using
+\code{dec_mark = ","} with \code{0.152} would result in a formatted value
+of \code{0,152}).}
 
 \item{placement}{the placement of the currency symbol. This can be either be
 \code{left} (the default) or \code{right}.}
@@ -79,13 +105,14 @@ locale ID will override any values provided in \code{sep_mark} and
 an object of class \code{gt_tbl}.
 }
 \description{
-With numeric values in a \pkg{gt} table, we can perform currency-based formatting.
-This function supports both automatic formatting with a three-letter currency
-code and numeric formatting facilitated through the use of a locale ID.
-}
-\details{
-The targeted numeric values are rendered with the following options:
+With numeric values in a \pkg{gt} table, we can perform currency-based
+formatting. This function supports both automatic formatting with a
+three-letter currency code and numeric formatting facilitated through the use
+of a locale ID. For fine control the conversion from numeric to currency
+values, we can take advantage of the following options:
 \itemize{
+\item the currency: providing a currency code or common currency name will
+procure the correct currency symbol and number of currency subunits
 \item currency symbol placement: the currency symbol can be placed before
 or after the values
 \item decimals/subunits: choice of the number of decimal places, and a
@@ -96,11 +123,17 @@ less than zero
 \item digit grouping separators: options to enable/disable digit separators
 and provide a choice of separator symbol
 \item scaling: we can choose to scale targeted values by a multiplier value
+\item large-number suffixing: larger figures (thousands, millions, etc.) can
+be autoscaled and decorated with the appropriate suffixes
 \item pattern: option to use a text pattern for decoration of the formatted
 currency values
 \item locale-based formatting: providing a locale ID will result in
 currency formatting specific to the chosen locale
 }
+}
+\details{
+We can use the \code{\link{info_currencies}()} function for a useful
+reference on all of the possible inputs to \code{currency}.
 
 Targeting of values is done through \code{columns} and additionally by
 \code{rows} (if nothing is provided for \code{rows} then entire columns are

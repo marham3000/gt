@@ -433,13 +433,19 @@ is.html <- function(x) {
 #'
 #' This helper function is to be used with the \code{\link{tab_style}()}
 #' function, which itself allows for the setting of custom styles to one or more
-#' cells. We can also define several styles with a single call of
-#' \code{cells_styles} and \code{\link{tab_style}()} will reliably process that.
+#' cells. We can also define several styles within a single call of
+#' \code{cells_styles} and \code{\link{tab_style}()} will reliably apply those
+#' styles to the targeted element.
+#'
 #' @param bkgd_color the background color of the cell.
 #' @param text_color the text color.
 #' @param text_font the font or collection of fonts (subsequent font names are)
 #'   used as fallbacks.
-#' @param text_size the size of the font. Can either
+#' @param text_size the size of the font. Can be provided as a number that is
+#'   assumed to represent \code{px} values (or could be wrapped in the
+#'   \code{\link{px}()}) helper function. We can also use one of the following
+#'   absolute size keywords: \code{xx-small}, \code{x-small}, \code{small},
+#'   \code{medium}, \code{large}, \code{x-large}, or \code{xx-large}.
 #' @param text_style the text style. Can be one of either \code{"center"},
 #'   \code{"normal"}, \code{"italic"}, or \code{"oblique"}.
 #' @param text_weight the weight of the font. Can be a text-based keyword such
@@ -590,4 +596,60 @@ escape_latex <- function(text) {
     tidy_gsub("([&%$#_{}])", "\\\\\\1") %>%
     tidy_gsub("~", "\\\\textasciitilde ") %>%
     tidy_gsub("\\^", "\\\\textasciicircum ")
+}
+
+#' Get the LaTeX dependencies required for a gt table
+#'
+#' When working with Rnw (Sweave) files or otherwise writing LaTeX code,
+#' including a \pkg{gt} table can be problematic if we don't have knowledge
+#' of the LaTeX dependencies. For the most part, these dependencies are the
+#' LaTeX packages that are required for rendering a \pkg{gt} table. The
+#' \code{gt_latex_dependencies()} function provides an object that can be
+#' used to provide the LaTeX in an Rnw file, allowing \pkg{gt} tables to work
+#' and not yield errors due to missing packages.
+#'
+#' Here is an example Rnw document that shows how the
+#' \code{gt_latex_dependencies()} can be used in conjunction with a \pkg{gt}
+#' table:
+#'
+#' \preformatted{
+#' \%!sweave=knitr
+#'
+#' \documentclass{article}
+#'
+#' <<echo=FALSE>>=
+#' library(gt)
+#'  @
+#'
+#' <<results='asis', echo=FALSE>>=
+#' gt_latex_dependencies()
+#'  @
+#'
+#' \begin{document}
+#'
+#' <<results='asis', echo=FALSE>>=
+#' exibble %>% gt()
+#'  @
+#'
+#' \end{document}
+#' }
+#' @family helper functions
+#' @export
+gt_latex_dependencies <- function() {
+
+  if (requireNamespace("knitr", quietly = TRUE)) {
+
+    paste(
+      "",
+      "% gt packages",
+      paste0("\\usepackage{", latex_packages(), "}", collapse = "\n"),
+      "",
+      sep = "\n"
+    ) %>%
+      knitr::asis_output()
+
+  } else {
+    stop("The `knitr` package is required for getting the LaTeX dependency headers.",
+         call. = FALSE)
+  }
 }

@@ -6,8 +6,8 @@
 \usage{
 fmt_number(data, columns, rows = NULL, decimals = 2,
   drop_trailing_zeros = FALSE, negative_val = "signed",
-  use_seps = TRUE, scale_by = 1, pattern = "{x}", sep_mark = ",",
-  dec_mark = ".", locale = NULL)
+  use_seps = TRUE, scale_by = 1, suffixing = FALSE,
+  pattern = "{x}", sep_mark = ",", dec_mark = ".", locale = NULL)
 }
 \arguments{
 \item{data}{a table object that is created using the \code{\link{gt}()}
@@ -45,6 +45,22 @@ provided to \code{locale}. This setting is \code{TRUE} by default.}
 
 \item{scale_by}{a value to scale the input. The default is \code{1.0}.}
 
+\item{suffixing}{an option to scale and apply suffixes to larger numbers
+(e.g., \code{1924000} can be transformed to \code{1.92M}). This option can
+accept a logical value, where \code{FALSE} (the default) will not perform
+this transformation and \code{TRUE} will apply thousands (\code{K}),
+millions (\code{M}), billions (\code{B}), and trillions (\code{T}) suffixes
+after automatic value scaling. We can also specify which symbols to use for
+each of the value ranges by using a character vector of the preferred
+symbols to replace the defaults (e.g., \code{c("k", "Ml", "Bn", "Tr")}).
+Including \code{NA} values in the vector will ensure that the particular
+range will either not be included in the transformation (e.g, \code{c(NA,
+"M", "B", "T")} won't modify numbers in the thousands range) or the range
+will inherit a previous suffix (e.g., with \code{c("K", "M", NA, "T")}, all
+numbers in the range of millions and billions will be in terms of
+millions). Any use of \code{suffixing} (where not \code{FALSE}) means that
+any value provided to \code{scale_by} will be ignored.}
+
 \item{pattern}{a formatting pattern that allows for decoration of the
 formatted value (defined here as \code{x}). The semantics for the pattern
 are taken from \code{glue::glue()}, where the formatted cell value is
@@ -53,9 +69,13 @@ pattern. We can treat other instances of \code{{...}} as environments that
 undergo evaluation, so, \code{x}, variables from the global environment,
 and functions are all usable within \code{{...}}.}
 
-\item{sep_mark}{the mark to use as a separator between groups of digits.}
+\item{sep_mark}{the mark to use as a separator between groups of digits
+(e.g., using \code{sep_mark = ","} with \code{1000} would result in a
+formatted value of \code{1,000}).}
 
-\item{dec_mark}{the character to use as a decimal mark.}
+\item{dec_mark}{the character to use as a decimal mark (e.g., using
+\code{dec_mark = ","} with \code{0.152} would result in a formatted value
+of \code{0,152}).}
 
 \item{locale}{an optional locale ID that can be used for formatting the value
 according the locale's rules. Examples include \code{"en_US"} for English
@@ -67,8 +87,10 @@ locale ID will override any values provided in \code{sep_mark} and
 an object of class \code{gt_tbl}.
 }
 \description{
-With numeric values in a \pkg{gt} table, we can perform number-based formatting so
-that the targeted values are rendered with the following options:
+With numeric values in a \pkg{gt} table, we can perform number-based
+formatting so that the targeted values are rendered with a higher
+consideration for tabular presentation. Furthermore, there is finer control
+over numeric foramtting with the following options:
 \itemize{
 \item decimals: choice of the number of decimal places, option to drop
 trailing zeros, and a choice of the decimal symbol
@@ -77,6 +99,8 @@ less than zero
 \item digit grouping separators: options to enable/disable digit separators
 and provide a choice of separator symbol
 \item scaling: we can choose to scale targeted values by a multiplier value
+\item large-number suffixing: larger figures (thousands, millions, etc.) can
+be autoscaled and decorated with the appropriate suffixes
 \item pattern: option to use a text pattern for decoration of the formatted
 values
 \item locale-based formatting: providing a locale ID will result in number
@@ -112,23 +136,26 @@ tab_1 <-
     use_seps = FALSE
   )
 
-# Use `exibble` to create a gt table;
-# format the `num` column as numeric,
-# but treating the first four rows
-# different than the last four
+# Use `countrypops` to create a gt
+# table; format all columns to use
+# large-number suffixing
 tab_2 <-
-  exibble \%>\%
-  gt() \%>\%
+  countrypops \%>\%
+  dplyr::select(
+    country_code_3, year, population) \%>\%
+  dplyr::filter(
+    country_code_3 \%in\% c(
+      "CHN", "IND", "USA", "PAK", "IDN")
+  ) \%>\%
+  dplyr::filter(year > 1975 & year \%\% 5 == 0) \%>\%
+  tidyr::spread(year, population) \%>\%
+  dplyr::arrange(desc(`2015`)) \%>\%
+  gt(rowname_col = "country_code_3") \%>\%
   fmt_number(
-    columns = vars(num),
-    rows = 1:4,
-    decimals = 2) \%>\%
-  fmt_number(
-    columns = vars(num),
-    rows = 5:8,
-    decimals = 1,
-    scale_by = 1/1000,
-    pattern = "{x}K")
+    columns = TRUE,
+    decimals = 2,
+    suffixing = TRUE
+  )
 
 }
 \seealso{
