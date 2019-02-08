@@ -407,6 +407,54 @@ apply_pattern_fmt_x <- function(pattern,
   glue::glue(pattern, x = values) %>% as.character()
 }
 
+# This function normalizes the `suffixing` input to a
+# character vector which is later appended to scaled
+# numerical values; the input can either be a single
+# logical value or a character vector
+normalize_suffixing_inputs <- function(suffixing) {
+
+  if (is_false(suffixing)) {
+
+    # If `suffixing` is FALSE, then return `NULL`;
+    # this will be used to signal there is nothing
+    # to be done in terms of scaling/suffixing
+    return(NULL)
+
+  } else if (isTRUE(suffixing)) {
+
+    # If `suffixing` is TRUE, return the default
+    # set of suffixes
+    return(c("K", "M", "B", "T"))
+
+  } else if (is.character(suffixing)) {
+
+    # In the case that a character vector is provided
+    # to `suffixing`, we first want to check if there
+    # are any names provided
+
+    # TODO: found that the conditional below seems
+    # better than other solutions to determine whether
+    # the vector is even partially named
+    if (!is.null(names(suffixing))) {
+      stop("The character vector supplied to `suffixed` cannot contain names.",
+           call. = FALSE)
+    }
+
+    # We can now return the character vector, having
+    # adequately tested for improper cases
+    return(suffixing)
+
+  } else {
+
+    # Stop function if the input to `suffixing` isn't
+    # valid (i.e., isn't logical and isn't a valid
+    # character vector)
+    stop("The value provided to `suffixing` must either be:\n",
+         " * `TRUE` or `FALSE` (the default)\n",
+         " * a character vector with suffixing labels",
+         call. = FALSE)
+  }
+}
 
 # Derive a label based on a formula or a function name
 #' @import rlang
