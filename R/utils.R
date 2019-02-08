@@ -372,18 +372,6 @@ markdown_to_text <- function(text) {
     unname()
 }
 
-# Get prepending and appending text based on a simple pattern
-get_pre_post_txt <- function(pattern) {
-
-  prefix <- strsplit(pattern, "\\{x\\}")[[1]][1]
-  suffix <- strsplit(pattern, "\\{x\\}")[[1]][2]
-
-  prefix <- ifelse(is.na(prefix), "", prefix)
-  suffix <- ifelse(is.na(suffix), "", suffix)
-
-  c(prefix, suffix)
-}
-
 #' Handle formatting of a pattern in a \code{fmt_*()} function
 #'
 #' Within the context of a \code{fmt_*()} function, we always have the
